@@ -1,0 +1,532 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Keyname for the keypair that Qwiklab will use
+  DBAllocatedStorage:
+    Default: '5'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+  DBInstanceClass:
+    Default: db.t2.micro
+    Description: The database instance type
+    Type: String
+    AllowedValues:
+      - db.t2.micro
+    ConstraintDescription: must select a valid database instance type.
+Mappings:
+  AWSRegionToAMI:
+    us-east-1:
+      AMI: ami-035be7bafff33b6b6
+    us-east-2:
+      AMI: ami-04328208f4f0cf1fe
+    us-west-1:
+      AMI: ami-0799ad445b5727125
+    us-west-2:
+      AMI: ami-032509850cf9ee54e
+    ca-central-1:
+      AMI: ami-0de8b8e4bc1f125fe
+    eu-west-1:
+      AMI: ami-0fad7378adf284ce0
+    eu-west-2:
+      AMI: ami-0664a710233d7c148
+    eu-central-1:
+      AMI: ami-0eaec5838478eb0ba
+    sa-east-1:
+      AMI: ami-0b04450959586da29
+    ap-southeast-1:
+      AMI: ami-04677bdaa3c2b6e24
+    ap-southeast-2:
+      AMI: ami-0c9d48b5db609ad6e
+    ap-south-1:
+      AMI: ami-0937dcc711d38ef3f
+    ap-northeast-1:
+      AMI: ami-0d7ed3ddb85b521a6
+    ap-northeast-2:
+      AMI: ami-018a9a930060d38aa
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: My Lab VPC
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    DependsOn: VPC
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    DependsOn:
+      - VPC
+      - InternetGateway
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select 
+        - '0'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: Public Subnet 1
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select 
+        - '1'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: Public Subnet 2
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select 
+        - '0'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: Private Subnet 1
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select 
+        - '1'
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: Private Subnet 2
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    DependsOn:
+      - VPC
+      - AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public Route Table
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn:
+      - VPC
+      - PublicRouteTable
+      - InternetGateway
+      - AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DependsOn:
+      - PublicRouteTable
+      - PublicSubnet1
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DependsOn:
+      - PublicRouteTable
+      - PublicSubnet2
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  PrivateRouteTable1:
+    Type: 'AWS::EC2::RouteTable'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table 1
+  PrivateRouteTable2:
+    Type: 'AWS::EC2::RouteTable'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table 2
+  PrivateSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DependsOn:
+      - PublicRouteTable
+      - PrivateSubnet1
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+  PrivateSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DependsOn:
+      - PublicRouteTable
+      - PrivateSubnet2
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+  PrivateNetworkAcl:
+    Type: 'AWS::EC2::NetworkAcl'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Network
+          Value: Private Network ACL
+  EIP1:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+  EIP2:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+  NATGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP1
+        - AllocationId
+      SubnetId:
+        Ref: PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: NAT Gateway1
+  NATGateway2:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP2
+        - AllocationId
+      SubnetId:
+        Ref: PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: NAT Gateway2
+  Bastion:
+    DependsOn:
+      - PublicSubnet1
+      - BastionHostSecurityGroup
+      - AttachGateway
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !FindInMap 
+        - AWSRegionToAMI
+        - !Ref 'AWS::Region'
+        - AMI
+      KeyName: !Ref KeyName
+      InstanceType: t2.micro
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          GroupSet:
+            - !Ref BastionHostSecurityGroup
+          SubnetId: !Ref PublicSubnet1
+          AssociatePublicIpAddress: true
+      Tags:
+        - Key: Name
+          Value: Bastion
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    DependsOn: VPC
+    Properties:
+      GroupDescription: Enable HTTP access for ALB
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: ALB-Security-Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+  WebSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    DependsOn: VPC
+    Properties:
+      GroupDescription: Enable HTTP access
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Web-Security-Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+  BastionHostSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    DependsOn: VPC
+    Properties:
+      GroupDescription: Enable SSH access
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Bastion-Host-Security-Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+  DBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    DependsOn:
+      - VPC
+      - WebSecurityGroup
+    Properties:
+      GroupDescription: DB Instance Security Group
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: DB-Security-Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+  PrivateRoute1:
+    Type: 'AWS::EC2::Route'
+    DependsOn:
+      - NATGateway1
+      - PrivateRouteTable1
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        !Ref NATGateway1
+  PrivateRoute2:
+    Type: 'AWS::EC2::Route'
+    DependsOn:
+      - NATGateway2
+      - PrivateRouteTable2
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        !Ref NATGateway2
+  dbsubnetgroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    DependsOn:
+      - PrivateSubnet1
+      - PrivateSubnet2
+    Properties:
+      DBSubnetGroupDescription: Lab DB Subnet Group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+  labdbinstance:
+    Type: 'AWS::RDS::DBInstance'
+    DependsOn:
+      - ASG
+      - ALB
+    Properties:
+      DBName: lab
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: MySQL
+      MasterUsername: master
+      MasterUserPassword: lab-password
+      MultiAZ: 'true'
+      DBSubnetGroupName: !Ref dbsubnetgroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: MySQL Lab DB Instance
+  EC2LaunchConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    DependsOn:
+      - VPC
+      - WebSecurityGroup
+      - PublicSubnet2
+      - PublicRoute
+      - NATGateway1
+      - NATGateway2
+    Properties:
+      ImageId: !FindInMap 
+        - AWSRegionToAMI
+        - !Ref 'AWS::Region'
+        - AMI
+      KeyName: !Ref KeyName
+      InstanceType: t2.micro
+      SecurityGroups:
+      - !Ref WebSecurityGroup
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -ex 
+            - |
+              yum -y update
+            - |
+              yum -y install httpd php mysql php-mysql
+            - |
+              chkconfig httpd on
+            - |
+              service httpd start
+            - |
+              if [ ! -f /var/www/html/lab2-app.tar.gz ]; then
+            - |
+              cd /var/www/html
+            - >
+              wget https://us-west-2-aws-training.s3.amazonaws.com/awsu-ilt/AWS-100-ESS/v4.2/lab-2-configure-website-datastore/scripts/lab2-app.tar.gz            
+            - |
+              tar xvfz lab2-app.tar.gz
+            - |
+              chown -R apache:root /var/www/html
+            - |
+              fi
+  ASG:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    DependsOn: 
+      - EC2LaunchConfiguration
+      - ALB
+      - TG
+      - AttachGateway
+      - PrivateSubnet1RouteTableAssociation
+      - PrivateSubnet2RouteTableAssociation
+    Properties:
+      AutoScalingGroupName: 'ASG'
+      Cooldown: 180
+      DesiredCapacity: 2
+      MaxSize: 5
+      MinSize: 2
+      HealthCheckGracePeriod: 300
+      HealthCheckType: ELB
+      LaunchConfigurationName: !Ref EC2LaunchConfiguration
+      Tags:
+        - Key: Name
+          Value: Web Instance
+          PropagateAtLaunch: true
+      TargetGroupARNs:
+        - !Ref TG
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      MetricsCollection:
+        - Granularity: "1Minute"
+  ALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    DependsOn: 
+      - ALBSecurityGroup
+      - PublicSubnet1
+      - PublicSubnet2
+      - PrivateSubnet1RouteTableAssociation
+      - PrivateSubnet2RouteTableAssociation
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+      - Ref: PublicSubnet1
+      - Ref: PublicSubnet2
+      SecurityGroups:
+      - Ref: ALBSecurityGroup
+      Type: application
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+  ELBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    DependsOn:
+      - ALB
+      - TG
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: TG
+      LoadBalancerArn:
+        Ref: ALB
+      Port: 80
+      Protocol: HTTP
+  TG:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: 
+      - VPC
+    Properties:
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 20
+      HealthyThresholdCount: 2
+      HealthCheckIntervalSeconds: 30
+      Name: !Sub ${AWS::StackName}-TG
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VPC
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: ASG
+      Cooldown: '180'
+      ScalingAdjustment: '1'
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: ASG
+      Cooldown: '180'
+      ScalingAdjustment: '-1'
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '75'
+      AlarmDescription: CPU High Alarm
+      Period: '60'
+      AlarmActions:
+      - Ref: ScaleUpPolicy
+      Namespace: AWS/EC2
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: ASG
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: CPUUtilization
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '25'
+      AlarmDescription: CPU Low Alarm
+      Period: '60'
+      AlarmActions:
+      - Ref: ScaleDownPolicy
+      Namespace: AWS/EC2
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: ASG
+      ComparisonOperator: LessThanThreshold
+      MetricName: CPUUtilization
